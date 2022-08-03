@@ -164,6 +164,7 @@ as.tibble(ko_pH) %>% # data.frame
   ggplot2::coord_equal() 
 ```
 
+## Classificação de cada ponto dentro do contorno (TRUE)
 
 ```{r}
 df_ko_ph <- as.tibble(ko_pH)  %>% 
@@ -187,6 +188,8 @@ df_ko_ph %>% # data.frame
   labs(fill="") +
   theme_bw()
 ```
-```
+
+
+
 
 

@@ -204,7 +204,7 @@ ko_pH <- krige(pH~1,
                debug.level=-1, # mostra o progresso em porcentagem do procedimento
 )
 #> [using ordinary kriging]
-#>   3% done 12% done 26% done 42% done 58% done 75% done100% done
+#>   3% done 45% done 89% done100% done
 ```
 
 ## Mapa de padrão espacial
@@ -223,6 +223,8 @@ as.tibble(ko_pH) %>% # data.frame
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+
+## Classificação de cada ponto dentro do contorno (TRUE)
 
 ``` r
 df_ko_ph <- as.tibble(ko_pH)  %>% 
@@ -247,4 +249,4 @@ df_ko_ph %>% # data.frame
   theme_bw()
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-18-1.png)<!-- --> \`\`\`
+![](README_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
