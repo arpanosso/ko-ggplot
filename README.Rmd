@@ -1,0 +1,192 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Utilizando o ggplot2 para o mapeamento da krigagem
+
+
+## Carregando os pacotes
+
+```{r,message=FALSE,error=FALSE,warning=FALSE}
+library(sp)       # pacote para chamar shapes
+library(maptools) # pacote para editar mapas
+library(raster)   # pacote para chamar rasteres
+library(gstat)    # pacote geoestatística
+library(graphics) # pacote gráfico
+library(lattice)  # pacote lattice
+library(tidyverse)  # pacote tidyverse
+```
+
+
+### Duas opções 
+- 1ª) determine o caminho de procura do arquivo de dados acionando as abas no RStudio:
+- Session/Set Working Directory/Choose Directory/..., ou
+- 2ª) pela área de trabalho (clipboard)
+
+## Entrada de dados
+
+```{r}
+dados_broom<-read.table("data/BroomBarnFarm.txt",h=T) # lendo o arquivo de dados pelo caminho indicado
+head(dados_broom)   
+```
+
+## Definindo as coordenadas do objeto de classe espacial do pacote `{sp}` (SpatialPointsDataFrame).
+
+```{r}
+coordinates(dados_broom) <- c("X","Y") 
+str(dados_broom)
+```
+
+
+## Contrução do variograma da variável alvo
+
+```{r}
+(v_pH<-variogram(pH~1,dados_broom)) # calculando e imprimindo o arquivo do variograma experimental 
+plot(v_pH,pl=F,pch=16,col=1,   # gráfico do variograma 
+     xlab="Distância",
+     ylab="Semivariância") 
+```
+### Reproduzir usando o ggplot2
+
+```{r}
+v_pH %>% 
+  ggplot(aes(x=dist, y=gamma)) +
+  geom_point() +
+  theme_classic() +
+  labs(x="Distância", y="Semivariância", title = "pH") +
+  coord_cartesian(xlim = c(0,10), ylim = c(0,.4))
+```
+
+
+## Modelagem do semivariograma
+
+```{r}
+(m_pH <- fit.variogram(v_pH,vgm(0.35,"Sph",6,0)))
+```
+
+
+### Calculando e imprimindo a soma de quadrados do erro (SQErro)
+```{r}
+(sqr_pH<-attr(m_pH, "SSErr"))
+```
+### Gráfico do variograma experimental com o modelo ajustado
+```{r}
+plot(v_pH,model=m_pH, col=1,pl=F,pch=16,
+     xlab="Distância",
+     ylab="Semivariância",
+     main =" Variável pH\n esf(0,0165; 0,339; 4.9291; 0.2149)")
+```
+
+## Semivariograma usando o ggplot2
+
+```{r}
+preds = gstat::variogramLine(m_pH, maxdist = max(v_pH$dist))
+v_pH %>% 
+  ggplot(aes(dist, gamma)) +
+  geom_point() +
+  geom_line(data = preds, color="red") +
+    theme_classic() +
+  labs(x="Distância", y="Semivariância", title = "pH",
+       subtitle = "esf(0,0165; 0,339; 4.9291; 0.2149)") +
+  coord_cartesian(xlim = c(0,10), ylim = c(0,.4))+
+  theme(plot.title = element_text(hjust=0.5),
+        plot.subtitle = element_text(hjust=0.5))
+```
+
+## Criando GRID
+
+```{r}
+dist <- 0.1 #  Distancia entre pontos
+grid_broom <- expand.grid(X=seq(min(dados_broom$X),max(dados_broom$X),dist), Y=seq(min(dados_broom$Y),max(dados_broom$Y),dist))
+coordinates(grid_broom) <- ~ X + Y
+# grid_broom<-as(grid_broom,"SpatialPixelsDataFrame")
+```
+
+## 1ª) opção - criar o Contorno com o script a seguir
+
+```{r}
+# plot(dados_broom, pch=16)
+# coords <- locator(type="l", col='red') # Desenhando contorno
+#coords <- as.data.frame(coords) # display list
+#coords = rbind(coords, coords[1,]) # igualando primeiro e ultimo ponto
+#contorno =SpatialPolygons( list(Polygons(list(Polygon(coords)), 1))) #Trasnformação do arquivo contorno em poligono
+#X11() 
+#plot(contorno,lwd=2) # imprimindo o contorno
+```
+
+## 2ª) opçao - leitura do arquivo contorno (Atenção!! É necessário estabelecer o caminho de leitura )
+```{r}
+coords_contorno<-read.table("data/contornoBroomBarnFarm1.txt",h=T)
+head(coords_contorno)
+plot(coords_contorno, type="l")
+```
+
+## Trasnformação do contorno em arquivo poligono espacial
+
+```{r}
+contorno <- SpatialPolygons( list(Polygons(list(Polygon(coords_contorno)), 1))) 
+plot(dados_broom@coords,pch=16,cex=0.2) # gráfico da malha amostral
+plot(contorno,add=T)     # adicionando o poligono do contorno
+```
+
+
+## Krigagem ordinária
+
+```{r}
+ko_pH <- krige(pH~1, 
+               dados_broom,   # especificando o arquivo de dados
+               grid_broom,       # especificando o arquivo grid expandidos para receber as estimativas 
+               m_pH,             # especificando o modelo ajustado
+               nmin=7,           # número mínimo de vizinhos
+               nmax=25,          # número máximo de vizinhos
+               #              block=c(4,4),     # opção por krigagem por bloco
+               na.action=na.pass,# função que determina o deve ser feito com missing values
+               debug.level=-1, # mostra o progresso em porcentagem do procedimento
+)
+```
+
+## Mapa de padrão espacial
+
+```{r}
+as.tibble(ko_pH) %>% # data.frame
+  ggplot(aes(x=X,y=Y)) + # definindo as coordenadas
+  geom_tile(aes(fill = var1.pred )) + # definindo o pixel (tile)
+  ggplot2::scale_fill_gradient(low = "yellow", high = "blue") +# gradiente de cor
+  ggplot2::coord_equal() 
+```
+
+
+```{r}
+df_ko_ph <- as.tibble(ko_pH)  %>% 
+  mutate(
+    flag = as.logical(point.in.polygon(point.x = X,
+                                  point.y =Y,
+                                  pol.x = coords_contorno$X,
+                                  pol.y = coords_contorno$Y))
+  )
+```
+
+
+## Mapeando com o contorno
+```{r}
+df_ko_ph %>% # data.frame
+  dplyr::filter(flag) %>% 
+  ggplot(aes(x=X,y=Y)) + # definindo as coordenadas
+  geom_tile(aes(fill = var1.pred )) + # definindo o pixel (tile)
+  ggplot2::scale_fill_gradient(low = "yellow", high = "blue") +# gradiente de cor
+  ggplot2::coord_equal() +
+  labs(fill="") +
+  theme_bw()
+```
+```
+
+
